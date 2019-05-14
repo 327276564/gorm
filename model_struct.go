@@ -59,6 +59,7 @@ type StructField struct {
 	IsNormal        bool
 	IsIgnored       bool
 	IsScanner       bool
+	IsAutoIncrement bool
 	HasDefaultValue bool
 	Tag             reflect.StructTag
 	TagSettings     map[string]string
@@ -97,6 +98,7 @@ func (sf *StructField) clone() *StructField {
 		Name:            sf.Name,
 		Names:           sf.Names,
 		IsPrimaryKey:    sf.IsPrimaryKey,
+		IsAutoIncrement: sf.IsAutoIncrement,
 		IsNormal:        sf.IsNormal,
 		IsIgnored:       sf.IsIgnored,
 		IsScanner:       sf.IsScanner,
@@ -192,9 +194,8 @@ func (scope *Scope) GetModelStruct() *ModelStruct {
 				if _, ok := field.TagSettingsGet("DEFAULT"); ok {
 					field.HasDefaultValue = true
 				}
-
-				if _, ok := field.TagSettingsGet("AUTO_INCREMENT"); ok && !field.IsPrimaryKey {
-					field.HasDefaultValue = true
+				if _, ok := field.TagSettingsGet("AUTO_INCREMENT"); ok && field.IsPrimaryKey {
+					field.IsAutoIncrement = true
 				}
 
 				indirectType := fieldStruct.Type

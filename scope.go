@@ -1151,6 +1151,9 @@ func (scope *Scope) createTable() *Scope {
 	var tags []string
 	var primaryKeys []string
 	var primaryKeyInColumnType = false
+	var autoKeyInColumnType = false
+	var autoName string
+	defaultTableName := scope.GetModelStruct().defaultTableName
 	for _, field := range scope.GetModelStruct().StructFields {
 		if field.IsNormal {
 			sqlTag := scope.Dialect().DataTypeOf(field)
@@ -1158,8 +1161,12 @@ func (scope *Scope) createTable() *Scope {
 			// Check if the primary key constraint was specified as
 			// part of the column type. If so, we can only support
 			// one column as the primary key.
-			if strings.Contains(strings.ToLower(sqlTag), "primary key") {
+			if field.IsPrimaryKey {
 				primaryKeyInColumnType = true
+			}
+			if field.IsAutoIncrement {
+				autoKeyInColumnType = true
+				autoName = field.DBName
 			}
 
 			tags = append(tags, scope.Quote(field.DBName)+" "+sqlTag)
@@ -1172,11 +1179,35 @@ func (scope *Scope) createTable() *Scope {
 	}
 
 	var primaryKeyStr string
-	if len(primaryKeys) > 0 && !primaryKeyInColumnType {
+	if len(primaryKeys) > 0 && primaryKeyInColumnType {
 		primaryKeyStr = fmt.Sprintf(", PRIMARY KEY (%v)", strings.Join(primaryKeys, ","))
 	}
+	var sqls string
+	tableName := scope.QuotedTableName()
+	sqls = fmt.Sprintf("CREATE TABLE %v (%v %v)%s", tableName, strings.Join(tags, ","), primaryKeyStr, scope.getTableOptions())
+	scope.Raw(sqls).Exec()
+	if scope.Dialect().GetName() == "oci8" {
+		if autoKeyInColumnType && primaryKeyInColumnType {
+			clear_semicolon := func(input string) string {
+				fun := func (c rune) bool {
+					if c != '"'{
+						return false
+					}
+					return true
+				}
+				return strings.TrimFunc(input, fun)
+			}
+			seqName := "\"seq_" + clear_semicolon(tableName) + "\""
+			sqls = fmt.Sprintf("CREATE SEQUENCE %v INCREMENT BY 1 START WITH 1 NOMAXVALUE NOMINVALUE NOCACHE", seqName)
+			scope.Raw(sqls).Exec()
 
-	scope.Raw(fmt.Sprintf("CREATE TABLE %v (%v %v)%s", scope.QuotedTableName(), strings.Join(tags, ","), primaryKeyStr, scope.getTableOptions())).Exec()
+
+			triggerName := "\"trigger_" + clear_semicolon(tableName) + "\""
+			sqls = fmt.Sprintf("CREATE TRIGGER %v BEFORE INSERT ON %v FOR EACH ROW WHEN (NEW.\"%v\" IS NULL) BEGIN SELECT %v.nextval INTO :NEW.\"%v\" FROM DUAL; END TR_FCBOOK;",
+				triggerName, tableName, autoName, seqName, autoName)
+			scope.Raw(sqls).Exec()
+		}
+	}
 
 	scope.autoIndex()
 	return scope

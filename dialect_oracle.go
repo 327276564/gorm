@@ -50,10 +50,12 @@ func (s *oracle) DataTypeOf(field *StructField) string {
 		case reflect.Float32, reflect.Float64:
 			sqlType = "FLOAT"
 		case reflect.String:
-			if size > 0 && size < 255 {
+			if size > 0 && size < 256 {
 				sqlType = fmt.Sprintf("VARCHAR(%d)", size)
+			} else if size > 255 && size < 4001{
+				sqlType = fmt.Sprintf("VARCHAR2(%d)", size)
 			} else {
-				sqlType = "VARCHAR(255)"
+				sqlType = fmt.Sprintf("CLOB")
 			}
 		case reflect.Struct:
 			if _, ok := dataValue.Interface().(time.Time); ok {
