@@ -1153,7 +1153,6 @@ func (scope *Scope) createTable() *Scope {
 	var primaryKeyInColumnType = false
 	var autoKeyInColumnType = false
 	var autoName string
-	defaultTableName := scope.GetModelStruct().defaultTableName
 	for _, field := range scope.GetModelStruct().StructFields {
 		if field.IsNormal {
 			sqlTag := scope.Dialect().DataTypeOf(field)
